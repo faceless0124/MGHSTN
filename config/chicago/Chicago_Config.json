@@ -49,7 +49,7 @@
     "north_south_map_4": 2,
 
     "remote_sensing_feature_filename": "data/chicago/remote_256_16_16_chicago.pt",
-    "remote_sensing_image_path": "data/chicago_remote_sensing",
+    "remote_sensing_image_path": "data/chicago_remote_sensing_256",
 
     "recent_prior": 3,
     "week_prior": 4,
