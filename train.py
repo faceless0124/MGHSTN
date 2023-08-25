@@ -25,7 +25,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help='configuration file')
 parser.add_argument("--gpus", type=str, help="test program")
 parser.add_argument("--test", action="store_true", help="test program")
-parser.add_argument("--baseline", action="store_true", help="test program")
+parser.add_argument("--nors", action="store_true", help="no remote sensing")
+parser.add_argument("--infer", action="store_true", help="load model from file and infer")
 
 args = parser.parse_args()
 config_filename = args.config
@@ -124,9 +125,7 @@ def training(net,
              bfc,
              data_type='nyc',
              ):
-    for i in range(len(trans)):
-        trans[i] = torch.from_numpy(trans[i]).unsqueeze(0).to(device)
-    bfc = torch.from_numpy(bfc).unsqueeze(0).to(torch.float32).to(device)
+
     global_step = 1
     for epoch in range(1, training_epoch + 1):
         net.train()
@@ -150,15 +149,10 @@ def training(net,
             start_time = time()
             final_output, classification_output = net(train_feature, target_time, graph_feature, road_adj, risk_adj,
                                                       poi_adj, grid_node_map, trans)
-            print("after infer: %.2fs"%(time() - start_time), flush=True)
             l = mask_loss(final_output, classification_output, train_label, risk_mask, bfc, data_type)
-            # print("after loss: %.2fs"%(time() - start_time), flush=True)
             trainer.zero_grad()
-            # print("after zero: %.2fs"%(time() - start_time), flush=True)
             l.backward()
-            # print("after backward: %.2fs"%(time() - start_time), flush=True)
             trainer.step()
-            # print("after step: %.2fs"%(time() - start_time), flush=True)
             training_loss = l.cpu().item()
 
             print('global step: %s, epoch: %s, batch: %s, training loss: %.6f, time: %.2fs'
@@ -188,8 +182,12 @@ def training(net,
                      high_test_map), flush=True)
 
         # early stop according to val loss
-        early_stop(val_loss, test_rmse, test_recall, test_map, high_test_rmse, high_test_recall, high_test_map,
+        flag = early_stop(val_loss, test_rmse, test_recall, test_map, high_test_rmse, high_test_recall, high_test_map,
                    test_inverse_trans_pre, test_inverse_trans_label)
+        if flag:
+            torch.save(net, data_type+'_full_model.pth')
+            print("model saved in epoch: %s" % (epoch), flush=True)
+
         if early_stop.early_stop:
             print("Early Stopping in global step: %s, epoch: %s" % (global_step, epoch), flush=True)
 
@@ -197,7 +195,6 @@ def training(net,
                   % (early_stop.best_rmse, early_stop.best_recall, early_stop.best_map), flush=True)
             print('best test high RMSE: %.4f,best test high Recall: %.2f%%,best high test MAP: %.4f'
                   % (early_stop.best_high_rmse, early_stop.best_high_recall, early_stop.best_high_map), flush=True)
-
             break
     return early_stop.best_rmse, early_stop.best_recall, early_stop.best_map
 
@@ -257,26 +254,16 @@ def main(config):
 
     for i in trans_filename:
         trans.append(get_trans(i))
-    if not args.baseline:
-        # pretrain
-        # remote_sensing_feature = torch.load(remote_sensing_feature_filename)
-        # print("remote_sensing.shape:", remote_sensing_feature.shape)
-        # remote_sensing_data = remote_sensing_feature
-
-        # together
-        rsdataloader = get_remote_sensing_dataloader('no_norm', 256, remote_sensing_image_path)
+    if not args.nors:
+        rsdataloader = get_remote_sensing_dataloader('std', 256, remote_sensing_image_path)
         remote_sensing_data = next(iter(rsdataloader)).get('image').to(device)
     else:
         remote_sensing_data = None
 
     model = MGHN(train_data_shape[0][2], num_of_transformer_layers, seq_len, pre_len, transformer_hidden_size,
                        time_shape[0][1], graph_feature_shape[0][2], nums_of_filter, north_south_map, west_east_map,
-                       args.baseline, remote_sensing_data, num_of_heads, augment_channel)
+                       args.nors, remote_sensing_data, num_of_heads, augment_channel)
 
-    # multi gpu
-    if torch.cuda.device_count() > 1:
-        print("Let's use", torch.cuda.device_count(), "GPUs!", flush=True)
-        model = nn.DataParallel(model)
     model.to(device)
     print(model)
 
@@ -301,30 +288,45 @@ def main(config):
         else:
             poi_adj.append(get_adjacent(poi_adj_filename[i]))
 
-    # if not args.baseline:
-    #     rsdataloader = get_remote_sensing_dataloader('no_norm', 256, remote_sensing_path)
-    # else:
-    #     rsdataloader = None
-    training(
-        model,
-        training_epoch,
-        train_loader,
-        val_loader,
-        test_loader,
-        high_test_loader,
-        road_adj,
-        risk_adj,
-        poi_adj,
-        risk_mask,
-        grid_node_map,
-        trainer,
-        early_stop,
-        device,
-        scaler,
-        trans,
-        bfc,
-        data_type=config['data_type'],
-    )
+    for i in range(len(trans)):
+        trans[i] = torch.from_numpy(trans[i]).unsqueeze(0).to(device)
+    bfc = torch.from_numpy(bfc).unsqueeze(0).to(torch.float32).to(device)
+
+    if args.infer:
+        model = torch.load("1"+config['data_type']+"_full_model.pth")
+        test_rmse, test_recall, test_map, test_inverse_trans_pre, test_inverse_trans_label = \
+            predict_and_evaluate(model, test_loader, risk_mask, road_adj, risk_adj, poi_adj,
+                                 grid_node_map, trans, scaler, device)
+
+        high_test_rmse, high_test_recall, high_test_map, _, _ = \
+            predict_and_evaluate(model, high_test_loader, risk_mask, road_adj, risk_adj, poi_adj,
+                                 grid_node_map, trans, scaler, device)
+        
+        print('test RMSE: %.4f,test Recall: %.2f%%,test MAP: %.4f,'
+              'high test RMSE: %.4f,high test Recall: %.2f%%,high test MAP: %.4f'
+              % (test_rmse, test_recall, test_map, high_test_rmse, high_test_recall,
+                 high_test_map), flush=True)
+    else:
+        training(
+            model,
+            training_epoch,
+            train_loader,
+            val_loader,
+            test_loader,
+            high_test_loader,
+            road_adj,
+            risk_adj,
+            poi_adj,
+            risk_mask,
+            grid_node_map,
+            trainer,
+            early_stop,
+            device,
+            scaler,
+            trans,
+            bfc,
+            data_type=config['data_type'],
+        )
 
 
 if __name__ == "__main__":
