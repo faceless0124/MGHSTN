@@ -141,14 +141,11 @@ def mask_loss(predicts, classify_predicts, labels, region_mask, bfc, data_type="
         index_2 = (labels[0] > 0) & (labels[0] <= 0.04)
         index_3 = (labels[0] > 0.04) & (labels[0] <= 0.08)
         index_4 = labels[0] > 0.08
-        # loss_mask = loss_mask.unsqueeze(0).unsqueeze(0).repeat(batch_size, pre_len, 1, 1)
-        # mask = loss_mask == 0
 
         ratio_mask[index_1] = 0.05
         ratio_mask[index_2] = 0.2
         ratio_mask[index_3] = 0.25
         ratio_mask[index_4] = 0.5
-        # ratio_mask[mask] = 0
 
         mse_list[0] *= ratio_mask
     elif data_type == 'chicago':
@@ -157,33 +154,18 @@ def mask_loss(predicts, classify_predicts, labels, region_mask, bfc, data_type="
         index_2 = (labels[0] > 0) & (labels[0] <= 1 / 17)
         index_3 = (labels[0] > 1 / 17) & (labels[0] <= 2 / 17)
         index_4 = labels[0] > 2 / 17
-        # loss_mask = loss_mask.unsqueeze(0).unsqueeze(0).repeat(batch_size, pre_len, 1, 1)
-        # mask = loss_mask == 0
 
         ratio_mask[index_1] = 0.05
         ratio_mask[index_2] = 0.2
         ratio_mask[index_3] = 0.25
         ratio_mask[index_4] = 0.5
-        # ratio_mask[mask] = 0
         mse_list[0] *= ratio_mask
 
     if data_type == 'nyc':
-        # return torch.mean(mse_list[0]) + 3e-4 * bce_list[0] + torch.mean(mse_list[1]) + mse_fc + 3e-4 * bce_list[1] + \
-        #     torch.mean(mse_list[2]) + torch.mean(mse_list[3])  # loss 1 ******
-        # return torch.mean(mse_f) + 3e-4 * bce_f # loss 2
-        # return torch.mean(mse_f) + 3e-4 * bce_f # loss 3
         return torch.mean(mse_list[0])  + torch.mean(mse_list[1]) + torch.mean(mse_list[2]) + torch.mean(mse_list[3]) + \
             3e-4 * bce_list[0] + 3e-4 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + mse_fc  # best
 
     if data_type == 'chicago':
-        # return torch.mean(mse_f) + 1e-3 * bce_f + 3e-3 * mse_c + 3e-3 * mse_fc + 1e-3 * bce_c # loss 1
-        # return torch.mean(mse_f) + 1e-3 * bce_f + 1e-3 * mse_c + 1e-3 * mse_fc + 1e-3 * bce_c # loss 2
-        # return torch.mean(mse_list[0]) + 1e-3 * bce_list[0] + 3e-4 * torch.mean(mse_list[1]) + 3e-4 * mse_fc + \
-        #     1e-3 * bce_list[1] + 1e-4 * torch.mean(mse_list[2]) + 3e-5 * torch.mean(mse_list[3])  # loss 3 ******
-        # return torch.mean(mse_f) + 1e-3 * bce_f + 1e-3 * bce_c # loss 4
-        # return torch.mean(mse_f) + 1e-3 * bce_f # loss 5
-        # return torch.mean(mse_f) + 1e-3 * bce_f # loss 6
-        # return torch.mean(mse_f) + 3e-4 * mse_c + 3e-4 * mse_fc  # no bce
         return torch.mean(mse_list[0]) + 3e-4 * torch.mean(mse_list[1]) + 1e-4 * torch.mean(mse_list[2]) + 3e-5 * torch.mean(mse_list[3]) + \
             1e-3 * bce_list[0] + 1e-3 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + 3e-4 * mse_fc # best
 
@@ -206,7 +188,8 @@ def bce(y_pred, y_true, padded_value_indicator=0):
     valid_mask = y_true != padded_value_indicator
 
     # clamp to avoid errors since bce requires 0 < x < 1
-    y_pred = torch.clamp(y_pred, max=1)
+    y_pred = torch.clamp(y_pred, min=0.0, max=1.0)
+
     y_true = torch.where(y_true != 0, torch.tensor(1.0).to(device), y_true)
     ls = torch.nn.BCELoss(reduction='none')(y_pred, y_true)
 
