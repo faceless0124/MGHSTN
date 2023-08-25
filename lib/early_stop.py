@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
@@ -56,11 +55,14 @@ class EarlyStopping:
         else:
             print(f'EarlyStopping update val_loss: {self.best_score} --> {current_score}')
             self.best_score = current_score
+            self.counter = 0
             if -self.best_rmse + self.best_recall + 100 * self.best_map < -test_rmse + test_recall + 100 * test_map:
                 self.update_test_metrics(test_rmse, test_recall, test_map,
                                      high_test_rmse, high_test_recall, high_test_map,
                                      test_inverse_trans_pre, test_inverse_trans_label)
-            self.counter = 0
+                return True
+
+        return False
 
     def update_test_metrics(self, test_rmse, test_recall, test_map,
                             high_test_rmse, high_test_recall, high_test_map,
