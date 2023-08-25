@@ -48,46 +48,14 @@ def split_and_norm_data(all_data, train_rate=0.6, valid_rate=0.2, recent_prior=3
         yield np.array(X), np.array(Y), np.array(high_X), np.array(high_Y), scaler
 
 
-# def normal_and_generate_dataset(all_data_filename, train_rate=0.6, valid_rate=0.2, recent_prior=3, week_prior=4,
-#                                 one_day_period=24, days_of_week=7, pre_len=1):
-#     """
-#
-#     Arguments:
-#         all_data_filename {str} -- all data filename
-#
-#     Keyword Arguments:
-#         train_rate {float} -- train rate (default: {0.6})
-#         valid_rate {float} -- valid rate (default: {0.2})
-#         recent_prior {int} -- the length of recent time (default: {3})
-#         week_prior {int} -- the length of week  (default: {4})
-#         one_day_period {int} -- the number of time interval in one day (default: {24})
-#         days_of_week {int} -- a week has 7 days (default: {7})
-#         pre_len {int} -- the length of prediction time interval(default: {1})
-#
-#     Yields:
-#         {np.array} --
-#                       X shape：(num_of_sample,seq_len,D,W,H)
-#                       Y shape：(num_of_sample,pre_len,W,H)
-#         {Scaler} -- train data max/min
-#     """
-#     risk_taxi_time_data = pkl.load(open(all_data_filename, 'rb')).astype(np.float32)
-#
-#     for i in split_and_norm_data(risk_taxi_time_data,
-#                                  train_rate=train_rate,
-#                                  valid_rate=valid_rate,
-#                                  recent_prior=recent_prior,
-#                                  week_prior=week_prior,
-#                                  one_day_period=one_day_period,
-#                                  days_of_week=days_of_week,
-#                                  pre_len=pre_len):
-#         yield i
-
 
 def split_and_norm_data_time(all_data, train_rate=0.6, valid_rate=0.2, recent_prior=3, week_prior=4, one_day_period=24,
                              days_of_week=7, pre_len=1):
     num_of_time, channel, _, _ = all_data.shape
     train_line, valid_line = int(num_of_time * train_rate), int(num_of_time * (train_rate + valid_rate))
-    for index, (start, end) in enumerate(((0, train_line), (train_line, valid_line), (valid_line, num_of_time))):
+    scal_line = int(train_line)
+    print(scal_line,train_line,valid_line)
+    for index, (start, end) in enumerate(((0, scal_line), (train_line, valid_line), (valid_line, num_of_time))):
         if index == 0:
             if channel == 48:
                 scaler = Scaler_NYC(all_data[start:end, :, :, :])
@@ -282,12 +250,13 @@ def generate_dataloader(
                 pre_len=pre_len)):
 
         if test:
-            x = x[:64]
-            y = y[:64]
-            target_times = target_times[:64]
-            high_x = high_x[:64]
-            high_y = high_y[:64]
-            high_target_times = high_target_times[:64]
+            len = 64
+            x = x[:len]
+            y = y[:len]
+            target_times = target_times[:len]
+            high_x = high_x[:len]
+            high_y = high_y[:len]
+            high_target_times = high_target_times[:len]
 
         grid_node_map = get_grid_node_map_maxtrix(grid_node_data_filename)
         if 'nyc' in all_data_filename:
