@@ -1,6 +1,6 @@
 # MGHSTN
 
-CIKM‘24 Urban Traffic Accident Risk Prediction Revisited: Regionality, Proximity, Similarity and Sparsity
+**CIKM‘24** Urban Traffic Accident Risk Prediction Revisited: Regionality, Proximity, Similarity and Sparsity
 
 **M**ulti-**G**ranularity **H**ierarchical **S**patio-**T**emporal **N**etwork
 
