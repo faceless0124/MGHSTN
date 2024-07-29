@@ -63,13 +63,12 @@ class GCN_Layer(nn.Module):
         Returns:
             {Tensor} -- output,shape (batch_size,N,num_of_filter)
         """
-        batch_size, _, _ = input.shape # 224，197，3
+        batch_size, _, _ = input.shape  # 224，197，3
         adj = torch.from_numpy(adj).to(input.device)
-        adj = adj.repeat(batch_size, 1, 1) # 224，197，197
-        input = torch.bmm(adj, input) # 224，197，3
-        output = self.gcn_layer(input) # 224，197，64
+        adj = adj.repeat(batch_size, 1, 1)  # 224，197，197
+        input = torch.bmm(adj, input)  # 224，197，3
+        output = self.gcn_layer(input)  # 224，197，64
         return output
-
 
 
 class RegionFeatureEncoder(nn.Module):
@@ -83,6 +82,7 @@ class RegionFeatureEncoder(nn.Module):
             seq_len {int} -- the time length of input
             transformer_hidden_size {int} -- the hidden size of GRU
             num_of_target_time_feature {int} -- the number of target time feature，为24(hour)+7(week)+1(holiday)=32
+            num_of_heads {int} -- the number of heads in multi-head attention
         """
         super(RegionFeatureEncoder, self).__init__()
         self.grid_conv = nn.Sequential(
@@ -95,7 +95,8 @@ class RegionFeatureEncoder(nn.Module):
         # TransformerEncoder layer
         self.positional_encoding = PositionalEncoding(d_model=grid_in_channel, dropout=0.1)  # positional encoding
         self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=grid_in_channel, nhead=num_of_heads, dim_feedforward=transformer_hidden_size*4),
+            nn.TransformerEncoderLayer(d_model=grid_in_channel, nhead=num_of_heads,
+                                       dim_feedforward=transformer_hidden_size * 4),
             num_layers=num_of_transformer_layers)  # Transformer encoder
         self.fc0 = nn.Linear(in_features=grid_in_channel, out_features=transformer_hidden_size)
 
@@ -103,7 +104,6 @@ class RegionFeatureEncoder(nn.Module):
         self.grid_att_fc2 = nn.Linear(in_features=num_of_target_time_feature, out_features=seq_len)
         self.grid_att_bias = nn.Parameter(torch.zeros(1))
         self.grid_att_softmax = nn.Softmax(dim=-1)
-
 
     def forward(self, grid_input, target_time_feature):
         """
@@ -123,11 +123,11 @@ class RegionFeatureEncoder(nn.Module):
             .contiguous() \
             .view(-1, T, D)
 
-        x = conv_output.permute(1, 0, 2)  # 把批次大小放在第二个维度上
-        x = self.positional_encoding(x)  # 加上位置编码
-        tr_output = self.transformer_encoder(x)  # 通过Transformer编码器
-        tr_output = tr_output.permute(1, 0, 2)  # 把批次大小放在第一个维度上
-        tr_output = self.fc0(tr_output)  # 把维度转换为hidden_size
+        x = conv_output.permute(1, 0, 2)
+        x = self.positional_encoding(x)
+        tr_output = self.transformer_encoder(x)
+        tr_output = tr_output.permute(1, 0, 2)
+        tr_output = self.fc0(tr_output)
 
         grid_target_time = torch.unsqueeze(target_time_feature, 1).repeat(1, W * H, 1).view(batch_size * W * H, -1)
         grid_att_fc1_output = torch.squeeze(self.grid_att_fc1(tr_output))
@@ -147,13 +147,8 @@ class GraphConv(nn.Module):
         Arguments:
             num_of_graph_feature {int} -- the number of graph node feature，(batch_size,seq_len,D,N),num_of_graph_feature=D
             nums_of_graph_filters {list} -- the number of GCN output feature
-            seq_len {int} -- the time length of input
-            num_of_transformer_layers {int} -- the number of GRU layers
-            transformer_hidden_size {int} -- the hidden size of GRU
-            num_of_target_time_feature {int} -- the number of target time feature，为24(hour)+7(week)+1(holiday)=32
             north_south_map {int} -- the weight of grid data
             west_east_map {int} -- the height of grid data
-
         """
         super(GraphConv, self).__init__()
         self.north_south_map = north_south_map
@@ -187,10 +182,6 @@ class GraphConv(nn.Module):
             road_adj {np.array} -- road adjacent matrix，shape：(N,N)
             risk_adj {np.array} -- risk adjacent matrix，shape：(N,N)
             poi_adj {np.array} -- poi adjacent matrix，shape：(N,N)
-            target_time_feature {Tensor} -- the feature of target time，shape：(batch_size,num_target_time_feature)
-            grid_node_map {np.array} -- map graph data to grid data,shape (W*H,N)
-        Returns:
-            {Tensor} -- shape：(batch_size,pre_len,north_south_map,west_east_map)
         """
         batch_size, T, D1, N = graph_feature.shape
 
@@ -215,13 +206,19 @@ class GraphConv(nn.Module):
             .contiguous() \
             .view(batch_size * N, T, -1) \
             .view(batch_size, T, -1, N)
-       
+
         return graph_output
 
 
 class GraphTsEncoder(nn.Module):
     def __init__(self, seq_len, num_of_transformer_layers, transformer_hidden_size, num_of_target_time_feature,
                  north_south_map, west_east_map, num_of_heads):
+        """
+            seq_len {int} -- the time length of input
+            num_of_transformer_layers {int} -- the number of GRU layers
+            transformer_hidden_size {int} -- the hidden size of GRU
+            num_of_target_time_feature {int} -- the number of target time feature，为24(hour)+7(week)+1(holiday)=32
+        """
         super(GraphTsEncoder, self).__init__()
         self.north_south_map = north_south_map
         self.west_east_map = west_east_map
@@ -237,6 +234,10 @@ class GraphTsEncoder(nn.Module):
         self.graph_att_softmax = nn.Softmax(dim=-1)
 
     def forward(self, graph_output, target_time_feature, grid_node_map):
+        """
+            target_time_feature {Tensor} -- the feature of target time，shape：(batch_size,num_target_time_feature)
+            grid_node_map {np.array} -- map graph data to grid data,shape (W*H,N)
+        """
         batch_size, T, _, N = graph_output.shape
 
         graph_output = graph_output.view(batch_size, T, N, -1) \
@@ -244,7 +245,7 @@ class GraphTsEncoder(nn.Module):
             .contiguous() \
             .view(batch_size * N, T, -1)
 
-        graph_output = graph_output.view(batch_size * N, T, -1) # （32*197, 7, 64）
+        graph_output = graph_output.view(batch_size * N, T, -1)  # （32*197, 7, 64）
         x = graph_output.permute(1, 0, 2)  # 把批次大小放在第二个维度上
         x = self.positional_encoding(x)  # 加上位置编码
         graph_output = self.transformer_encoder(x)  # 通过Transformer编码器
@@ -256,9 +257,9 @@ class GraphTsEncoder(nn.Module):
         graph_att_fc2_output = self.graph_att_fc2(graph_target_time)
         graph_att_score = self.graph_att_softmax(
             F.relu(graph_att_fc1_output + graph_att_fc2_output + self.graph_att_bias))
-        graph_att_score = graph_att_score.view(batch_size * N, -1, 1) # (6304,7,1)
+        graph_att_score = graph_att_score.view(batch_size * N, -1, 1)  # (6304,7,1)
         graph_output = torch.sum(graph_output * graph_att_score, dim=1)
-        graph_output = graph_output.view(batch_size, N, -1).contiguous() # (32,197,64)
+        graph_output = graph_output.view(batch_size, N, -1).contiguous()  # (32,197,64)
 
         grid_node_map_tmp = torch.from_numpy(grid_node_map) \
             .to(graph_output.device) \
@@ -286,6 +287,10 @@ class MGHSTN(nn.Module):
             nums_of_graph_filters {list} -- the number of GCN output feature
             north_south_map {list} -- the weight of grid data
             west_east_map {list} -- the height of grid data
+            is_nors {bool} -- whether to use remote sensing data
+            remote_sensing_data {Tensor} -- remote sensing data，shape：(batch_size,256,256)
+            num_of_heads {int} -- the number of heads in multi-head attention
+            augment_channel {int} -- the number of augment channel
         """
         super(MGHSTN, self).__init__()
         self.north_south_map = north_south_map
@@ -316,11 +321,11 @@ class MGHSTN(nn.Module):
         self.GConv = nn.ModuleList([GraphConv(num_of_graph_feature, nums_of_graph_filters,
                                               north_south_map[0], west_east_map[0]).cuda(),
                                     GraphConv(num_of_graph_feature, nums_of_graph_filters,
-                                                  north_south_map[1], west_east_map[1]).cuda(),
+                                              north_south_map[1], west_east_map[1]).cuda(),
                                     GraphConv(num_of_graph_feature, nums_of_graph_filters,
-                                                  north_south_map[2], west_east_map[2]).cuda(),
+                                              north_south_map[2], west_east_map[2]).cuda(),
                                     GraphConv(num_of_graph_feature, nums_of_graph_filters,
-                                                  north_south_map[3], west_east_map[3]).cuda()])
+                                              north_south_map[3], west_east_map[3]).cuda()])
 
         self.GTsEncoder = nn.ModuleList([GraphTsEncoder(seq_len, num_of_transformer_layers,
                                                         transformer_hidden_size,
@@ -328,20 +333,20 @@ class MGHSTN(nn.Module):
                                                         north_south_map[0], west_east_map[0],
                                                         num_of_heads).cuda(),
                                          GraphTsEncoder(seq_len, num_of_transformer_layers,
-                                                       transformer_hidden_size,
-                                                       num_of_target_time_feature,
-                                                       north_south_map[1], west_east_map[1],
-                                                       num_of_heads).cuda(),
+                                                        transformer_hidden_size,
+                                                        num_of_target_time_feature,
+                                                        north_south_map[1], west_east_map[1],
+                                                        num_of_heads).cuda(),
                                          GraphTsEncoder(seq_len, num_of_transformer_layers,
-                                                       transformer_hidden_size,
-                                                       num_of_target_time_feature,
-                                                       north_south_map[2], west_east_map[2],
-                                                       num_of_heads).cuda(),
+                                                        transformer_hidden_size,
+                                                        num_of_target_time_feature,
+                                                        north_south_map[2], west_east_map[2],
+                                                        num_of_heads).cuda(),
                                          GraphTsEncoder(seq_len, num_of_transformer_layers,
-                                                       transformer_hidden_size,
-                                                       num_of_target_time_feature,
-                                                       north_south_map[3], west_east_map[3],
-                                                       num_of_heads).cuda()])
+                                                        transformer_hidden_size,
+                                                        num_of_target_time_feature,
+                                                        north_south_map[3], west_east_map[3],
+                                                        num_of_heads).cuda()])
 
         self.grid_weight = nn.ModuleList([nn.Conv2d(in_channels=transformer_hidden_size,
                                                     out_channels=self.fusion_channel,
@@ -379,7 +384,6 @@ class MGHSTN(nn.Module):
                                            nn.Linear(self.fusion_channel * north_south_map[3] * west_east_map[3],
                                                      pre_len * north_south_map[3] * west_east_map[3]).cuda()])
 
-
     def forward(self, grid_input, target_time_feature, graph_feature,
                 road_adj, risk_adj, poi_adj, grid_node_map, trans):
         """
@@ -392,7 +396,6 @@ class MGHSTN(nn.Module):
             poi_adj {list of np.array} -- poi adjacent matrix，shape：(N,N)
             grid_node_map {list of np.array} -- map graph data to grid data,shape (W*H,N)
             trans {list of np.array} -- the transformation matrix of graph data，shape：(n_c,n_f)
-
         Returns:
             {Tensor} -- shape：(batch_size,pre_len,north_south_map,west_east_map)
         """

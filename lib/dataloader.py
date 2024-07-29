@@ -105,7 +105,7 @@ def get_mask(mask_path):
         mask_path {str} -- mask filename
     
     Returns:
-        {np.array} -- mask matrix，维度(W,H)
+        {np.array} -- mask matrix，shape(W,H)
     """
     mask = pkl.load(open(mask_path, 'rb')).astype(np.float32)
     return mask

@@ -9,6 +9,7 @@
 The code runs well under python 3.11.5. The required packages are as follows:
 
 - pytorch==2.0.1
+- torchvision==0.15.2
 - numpy==1.25.2
 - pickle, argparse, matplotlib, pandas
 

@@ -162,13 +162,13 @@ def mask_loss(predicts, classify_predicts, labels, region_mask, bfc, data_type="
         mse_list[0] *= ratio_mask
 
     if data_type == 'nyc':
-        return torch.mean(mse_list[0])  + torch.mean(mse_list[1]) + torch.mean(mse_list[2]) + torch.mean(mse_list[3]) + \
+        return torch.mean(mse_list[0]) + torch.mean(mse_list[1]) + torch.mean(mse_list[2]) + torch.mean(mse_list[3]) + \
             3e-4 * bce_list[0] + 3e-4 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + mse_fc  # best
 
     if data_type == 'chicago':
-        return torch.mean(mse_list[0]) + 3e-4 * torch.mean(mse_list[1]) + 1e-4 * torch.mean(mse_list[2]) + 3e-5 * torch.mean(mse_list[3]) + \
-            1e-3 * bce_list[0] + 1e-3 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + 3e-4 * mse_fc # best
-
+        return torch.mean(mse_list[0]) + 3e-4 * torch.mean(mse_list[1]) + 1e-4 * torch.mean(
+            mse_list[2]) + 3e-5 * torch.mean(mse_list[3]) + \
+            1e-3 * bce_list[0] + 1e-3 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + 3e-4 * mse_fc  # best
 
 
 def bce(y_pred, y_true, padded_value_indicator=0):
@@ -201,60 +201,6 @@ def bce(y_pred, y_true, padded_value_indicator=0):
     loss_output = torch.sum(document_loss) / torch.sum(sum_valid)
 
     return loss_output
-
-
-def listMLE(y_pred, y_true, eps=1e-10, padded_value_indicator=0):
-    """
-    ListMLE loss introduced in "Listwise Approach to Learning to Rank - Theory and Algorithm".
-    :param y_pred: predictions from the model, shape [batch_size, slate_length]
-    :param y_true: ground truth labels, shape [batch_size, slate_length]
-    :param eps: epsilon value, used for numerical stability
-    :param padded_value_indicator: an indicator of the y_true index containing a padded item, e.g. -1
-    :return: loss value, a torch.Tensor
-    """
-    # shuffle for randomised tie resolution
-    random_indices = torch.randperm(y_pred.shape[-1])
-    y_pred_shuffled = y_pred[:, random_indices]
-    y_true_shuffled = y_true[:, random_indices]
-
-    y_true_sorted, indices = y_true_shuffled.sort(descending=True, dim=-1)
-
-    mask = y_true_sorted == padded_value_indicator
-    preds_sorted_by_true = torch.gather(y_pred_shuffled, dim=1, index=indices)
-    preds_sorted_by_true[mask] = float('-1e10')
-
-    max_pred_values, _ = preds_sorted_by_true.max(dim=1, keepdim=True)
-    preds_sorted_by_true_minus_max = preds_sorted_by_true - max_pred_values
-    cumsums = torch.cumsum(preds_sorted_by_true_minus_max.exp().flip(dims=[1]), dim=1).flip(dims=[1])
-    observation_loss = torch.log(cumsums + eps) - preds_sorted_by_true_minus_max
-    observation_loss[mask] = 0.0
-
-    return torch.mean(torch.sum(observation_loss, dim=1))
-
-
-def listNet(y_pred, y_true, eps=1e-10, padded_value_indicator=0):
-    """
-    ListNet loss introduced in "Learning to Rank: From Pairwise Approach to Listwise Approach".
-    :param y_pred: predictions from the model, shape [batch_size, slate_length]
-    :param y_true: ground truth labels, shape [batch_size, slate_length]
-    :param eps: epsilon value, used for numerical stability
-    :param padded_value_indicator: an indicator of the y_true index containing a padded item, e.g. -1
-    :return: loss value, a torch.Tensor
-    """
-    # y_pred = y_pred.clone()
-    # y_true = y_true.clone()
-
-    mask = y_true == padded_value_indicator
-    y_pred[mask] = float('-1e10')
-    y_true[mask] = float('-1e10')
-
-    preds_smax = torch.softmax(y_pred, dim=1)
-    true_smax = torch.softmax(y_true, dim=1)
-
-    preds_smax = preds_smax + eps
-    preds_log = torch.log(preds_smax)
-
-    return torch.mean(-torch.sum(true_smax * preds_log, dim=1))
 
 
 @torch.no_grad()
