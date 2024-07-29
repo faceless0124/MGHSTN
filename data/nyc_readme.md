@@ -1,4 +1,4 @@
-1. `all_data.pkl`
+1. `all_data_[grid_num]_[grid_num].pkl`
    2013.1~2013.12，one time interval is 1h
 
    shape(T, D, W, H),D=48
@@ -29,23 +29,27 @@
 
    47:outflow
 
-2. `risk_mask.pkl`
+2. `bfc_20_10.pkl`
+
+   The  granularity transformation matrix for Hierarchical Constraint.
+
+3. `grid_node_[grid_num]_[grid_num].pkl`
+   map graph data to grid data
+
+   shape (W*H,N)
+
+4. `risk_mask_[grid_num]_[grid_num].pkl`
    shape(W,H)
    top risk region mask
 
-3. `risk_adj.pkl`
-   risk similarity graph adjacency matrix
-   shape (N,N)
-   
-4. `road_adj.pkl`
-   road similarity graph adjacency matrix
-   shape(N,N)
+5. `[view_type]_adj_[grid_num]_[grid_num].pkl`
 
-5. `poi_adj.pkl`
-   poi similarity graph adjacency matrix
-   shape(N,N)
-   
-6. `grid_node_map.pkl`
-   map graph data to grid data
-   shape (W*H,N)
+   risk/road/poi similarity graph adjacency matrix
+
+   shape (N,N)
+
+6. `trans_[grid_num]_[grid_num].pkl`
+
+   The transformation matrix for Multi-level Embedding Fusion
+
 

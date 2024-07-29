@@ -36,19 +36,21 @@
 
    shape (W*H,N)
 
-4. `risk_mask.pkl`
+4. `risk_mask_[grid_num]_[grid_num].pkl`
 
    shape(W,H)
 
    top risk region mask
 
-5. `risk_adj.pkl`
-   risk similarity graph adjacency matrix
+5. `[view_type]_adj_[grid_num]_[grid_num].pkl`
+
+   risk/road/poi similarity graph adjacency matrix
 
    shape (N,N)
 
-6. `road_adj.pkl`
-   road similarity graph adjacency matrix
+6. `trans_[grid_num]_[grid_num].pkl`
 
-   shape(N,N)
+   The transformation matrix for Multi-level Embedding Fusion
+
+   
 
