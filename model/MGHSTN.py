@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model.encoder import ImageEncoder
+from model.RSencoder import ImageEncoder
 from torch import Tensor
 
 curPath = os.path.abspath(os.path.dirname(__file__))
@@ -72,7 +72,7 @@ class GCN_Layer(nn.Module):
 
 
 
-class STModule(nn.Module):
+class RegionFeatureEncoder(nn.Module):
     def __init__(self, grid_in_channel, num_of_transformer_layers, seq_len,
                  transformer_hidden_size, num_of_target_time_feature, num_of_heads):
         """[summary]
@@ -84,7 +84,7 @@ class STModule(nn.Module):
             transformer_hidden_size {int} -- the hidden size of GRU
             num_of_target_time_feature {int} -- the number of target time feature，为24(hour)+7(week)+1(holiday)=32
         """
-        super(STModule, self).__init__()
+        super(RegionFeatureEncoder, self).__init__()
         self.grid_conv = nn.Sequential(
             nn.Conv2d(in_channels=grid_in_channel, out_channels=64, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -141,7 +141,7 @@ class STModule(nn.Module):
         return grid_output
 
 
-class GPModule(nn.Module):
+class GraphConv(nn.Module):
     def __init__(self, num_of_graph_feature, nums_of_graph_filters, north_south_map, west_east_map):
         """
         Arguments:
@@ -155,7 +155,7 @@ class GPModule(nn.Module):
             west_east_map {int} -- the height of grid data
 
         """
-        super(GPModule, self).__init__()
+        super(GraphConv, self).__init__()
         self.north_south_map = north_south_map
         self.west_east_map = west_east_map
         self.road_gcn = nn.ModuleList()
@@ -219,10 +219,10 @@ class GPModule(nn.Module):
         return graph_output
 
 
-class SGModule(nn.Module):
+class GraphTsEncoder(nn.Module):
     def __init__(self, seq_len, num_of_transformer_layers, transformer_hidden_size, num_of_target_time_feature,
                  north_south_map, west_east_map, num_of_heads):
-        super(SGModule, self).__init__()
+        super(GraphTsEncoder, self).__init__()
         self.north_south_map = north_south_map
         self.west_east_map = west_east_map
         self.positional_encoding = PositionalEncoding(d_model=64, dropout=0.1)  # 位置编码
@@ -269,7 +269,7 @@ class SGModule(nn.Module):
         return graph_output
 
 
-class MGHN(nn.Module):
+class MGHSTN(nn.Module):
     def __init__(self, grid_in_channel, num_of_transformer_layers, seq_len, pre_len, transformer_hidden_size,
                  num_of_target_time_feature, num_of_graph_feature, nums_of_graph_filters, north_south_map,
                  west_east_map, is_nors, remote_sensing_data, num_of_heads, augment_channel):
@@ -287,7 +287,7 @@ class MGHN(nn.Module):
             north_south_map {list} -- the weight of grid data
             west_east_map {list} -- the height of grid data
         """
-        super(MGHN, self).__init__()
+        super(MGHSTN, self).__init__()
         self.north_south_map = north_south_map
         self.west_east_map = west_east_map
         self.fusion_channel = 16
@@ -296,52 +296,52 @@ class MGHN(nn.Module):
 
         if not self.is_nors:
             self.remote_sensing_data = remote_sensing_data
-            self.encoder = ImageEncoder(256 * 256, self.augment_channel)
+            self.RSencoder = ImageEncoder(256 * 256, self.augment_channel)
             self.aug = grid_in_channel + self.augment_channel
         else:
             self.aug = grid_in_channel
-        self.st_module = nn.ModuleList(
-            [STModule(self.aug, num_of_transformer_layers, seq_len,
-                      transformer_hidden_size, num_of_target_time_feature,
-                      num_of_heads).cuda(),
-             STModule(grid_in_channel, num_of_transformer_layers, seq_len,
-                      transformer_hidden_size, num_of_target_time_feature,
-                      num_of_heads).cuda(),
-             STModule(grid_in_channel, num_of_transformer_layers, seq_len,
-                      transformer_hidden_size, num_of_target_time_feature,
-                      num_of_heads).cuda(),
-             STModule(grid_in_channel, num_of_transformer_layers, seq_len,
-                      transformer_hidden_size, num_of_target_time_feature,
-                      num_of_heads).cuda()])
-        self.gp_module = nn.ModuleList([GPModule(num_of_graph_feature, nums_of_graph_filters,
-                                                 north_south_map[0], west_east_map[0]).cuda(),
-                                        GPModule(num_of_graph_feature, nums_of_graph_filters,
-                                                           north_south_map[1], west_east_map[1]).cuda(),
-                                        GPModule(num_of_graph_feature, nums_of_graph_filters,
-                                                           north_south_map[2], west_east_map[2]).cuda(),
-                                        GPModule(num_of_graph_feature, nums_of_graph_filters,
-                                                           north_south_map[3], west_east_map[3]).cuda()])
+        self.RFEncoder = nn.ModuleList(
+            [RegionFeatureEncoder(self.aug, num_of_transformer_layers, seq_len,
+                                  transformer_hidden_size, num_of_target_time_feature,
+                                  num_of_heads).cuda(),
+             RegionFeatureEncoder(grid_in_channel, num_of_transformer_layers, seq_len,
+                                  transformer_hidden_size, num_of_target_time_feature,
+                                  num_of_heads).cuda(),
+             RegionFeatureEncoder(grid_in_channel, num_of_transformer_layers, seq_len,
+                                  transformer_hidden_size, num_of_target_time_feature,
+                                  num_of_heads).cuda(),
+             RegionFeatureEncoder(grid_in_channel, num_of_transformer_layers, seq_len,
+                                  transformer_hidden_size, num_of_target_time_feature,
+                                  num_of_heads).cuda()])
+        self.GConv = nn.ModuleList([GraphConv(num_of_graph_feature, nums_of_graph_filters,
+                                              north_south_map[0], west_east_map[0]).cuda(),
+                                    GraphConv(num_of_graph_feature, nums_of_graph_filters,
+                                                  north_south_map[1], west_east_map[1]).cuda(),
+                                    GraphConv(num_of_graph_feature, nums_of_graph_filters,
+                                                  north_south_map[2], west_east_map[2]).cuda(),
+                                    GraphConv(num_of_graph_feature, nums_of_graph_filters,
+                                                  north_south_map[3], west_east_map[3]).cuda()])
 
-        self.sg_module = nn.ModuleList([SGModule(seq_len, num_of_transformer_layers,
-                                                 transformer_hidden_size,
-                                                 num_of_target_time_feature,
-                                                 north_south_map[0], west_east_map[0],
-                                                 num_of_heads).cuda(),
-                                        SGModule(seq_len, num_of_transformer_layers,
-                                                            transformer_hidden_size,
-                                                            num_of_target_time_feature,
-                                                            north_south_map[1], west_east_map[1],
-                                                            num_of_heads).cuda(),
-                                        SGModule(seq_len, num_of_transformer_layers,
-                                                            transformer_hidden_size,
-                                                            num_of_target_time_feature,
-                                                            north_south_map[2], west_east_map[2],
-                                                            num_of_heads).cuda(),
-                                        SGModule(seq_len, num_of_transformer_layers,
-                                                            transformer_hidden_size,
-                                                            num_of_target_time_feature,
-                                                            north_south_map[3], west_east_map[3],
-                                                            num_of_heads).cuda()])
+        self.GTsEncoder = nn.ModuleList([GraphTsEncoder(seq_len, num_of_transformer_layers,
+                                                        transformer_hidden_size,
+                                                        num_of_target_time_feature,
+                                                        north_south_map[0], west_east_map[0],
+                                                        num_of_heads).cuda(),
+                                         GraphTsEncoder(seq_len, num_of_transformer_layers,
+                                                       transformer_hidden_size,
+                                                       num_of_target_time_feature,
+                                                       north_south_map[1], west_east_map[1],
+                                                       num_of_heads).cuda(),
+                                         GraphTsEncoder(seq_len, num_of_transformer_layers,
+                                                       transformer_hidden_size,
+                                                       num_of_target_time_feature,
+                                                       north_south_map[2], west_east_map[2],
+                                                       num_of_heads).cuda(),
+                                         GraphTsEncoder(seq_len, num_of_transformer_layers,
+                                                       transformer_hidden_size,
+                                                       num_of_target_time_feature,
+                                                       north_south_map[3], west_east_map[3],
+                                                       num_of_heads).cuda()])
 
         self.grid_weight = nn.ModuleList([nn.Conv2d(in_channels=transformer_hidden_size,
                                                     out_channels=self.fusion_channel,
@@ -405,14 +405,14 @@ class MGHN(nn.Module):
         classification_output = []
 
         if not self.is_nors:
-            remote_output = self.encoder(self.remote_sensing_data)
+            remote_output = self.RSencoder(self.remote_sensing_data)
             remote_output = remote_output.permute(1, 0).view(self.augment_channel, 20, 20).unsqueeze(0).unsqueeze(0) \
                 .repeat(batch_size, 7, 1, 1, 1)
             grid_input[0] = torch.cat((grid_input[0], remote_output), dim=2)
 
         for i in range(4):
-            t_grid_output = self.st_module[i](grid_input[i], target_time_feature[i])
-            t_graph_output = self.gp_module[i](graph_feature[i], road_adj[i], risk_adj[i], poi_adj[i])
+            t_grid_output = self.RFEncoder[i](grid_input[i], target_time_feature[i])
+            t_graph_output = self.GConv[i](graph_feature[i], road_adj[i], risk_adj[i], poi_adj[i])
             t_grid_output = self.grid_weight[i](t_grid_output)
 
             grid_output.append(t_grid_output)
@@ -442,7 +442,7 @@ class MGHN(nn.Module):
             graph_output[i + 1] = c1_graph_output
 
         for i in range(4):
-            graph_output[i] = self.sg_module[i](graph_output[i], target_time_feature[i], grid_node_map[i])
+            graph_output[i] = self.GTsEncoder[i](graph_output[i], target_time_feature[i], grid_node_map[i])
             graph_output[i] = self.graph_weight[i](graph_output[i])
             fusion_output.append(grid_output[i] + graph_output[i])  # 16,20,20
 

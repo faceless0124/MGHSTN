@@ -48,7 +48,6 @@
     "west_east_map_4": 2,
     "north_south_map_4": 2,
 
-    "remote_sensing_feature_filename": "data/nyc/remote_512_64_64_nyc.pt",
     "remote_sensing_image_path": "data/nyc_remote_sensing_256",
 
     "recent_prior": 3,

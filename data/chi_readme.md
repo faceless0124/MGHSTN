@@ -1,4 +1,4 @@
-1. `all_data.pkl`
+1. `all_data_[grid_num]_[grid_num].pkl`
    2016.2~2016.9，one time interval is 1h
 
    shape(T, D, W, H),D=41
@@ -27,24 +27,28 @@
 
    40:outflow
 
-2. `risk_mask.pkl`
-   shape(W,H)
+2. `bfc_20_10.pkl`
 
-   top risk region mask
+   The  granularity transformation matrix for Hierarchical Constraint.
 
-3. `risk_adj.pkl`
-   risk similarity graph adjacency matrix
-
-   shape (N,N)
-   
-4. `road_adj.pkl`
-   road similarity graph adjacency matrix
-
-   shape(N,N)
-
-5. `grid_node_map.pkl`
+3. `grid_node_[grid_num]_[grid_num].pkl`
    map graph data to grid data
 
    shape (W*H,N)
 
+4. `risk_mask.pkl`
+
+   shape(W,H)
+
+   top risk region mask
+
+5. `risk_adj.pkl`
+   risk similarity graph adjacency matrix
+
+   shape (N,N)
+
+6. `road_adj.pkl`
+   road similarity graph adjacency matrix
+
+   shape(N,N)
 

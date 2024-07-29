@@ -14,7 +14,7 @@ import os
 from lib.dataloader import get_mask, get_adjacent, get_grid_node_map_maxtrix, \
     get_trans, get_remote_sensing_dataloader, generate_dataloader
 from lib.early_stop import EarlyStopping
-from model.MGHN import MGHN
+from model.MGHSTN import MGHSTN
 from lib.utils import mask_loss, compute_loss, predict_and_evaluate
 
 curPath = os.path.abspath(os.path.dirname(__file__))
@@ -65,7 +65,6 @@ def loadConfig(config):
     transformer_hidden_size = config['transformer_hidden_size']
     gcn_num_filter = config['gcn_num_filter']
 
-    remote_sensing_feature_filename = config['remote_sensing_feature_filename']
     remote_sensing_image_path = config['remote_sensing_image_path']
     num_of_heads = config['num_of_heads']
     augment_channel = config['augment_channel']
@@ -101,7 +100,7 @@ def loadConfig(config):
 
     return (patience, delta, train_rate, valid_rate, recent_prior, week_prior, one_day_period, days_of_week, pre_len,
             seq_len, training_epoch, batch_size, learning_rate, num_of_transformer_layers, transformer_hidden_size,
-            gcn_num_filter, remote_sensing_feature_filename, remote_sensing_image_path,
+            gcn_num_filter, remote_sensing_image_path,
             all_data_filename, mask_filename, road_adj_filename, risk_adj_filename, poi_adj_filename, grid_node_filename
             , north_south_map, west_east_map, trans, bfc_20_10_filename, num_of_heads, augment_channel)
 
@@ -202,7 +201,7 @@ def training(net,
 def main(config):
     patience, delta, train_rate, valid_rate, recent_prior, week_prior, one_day_period, days_of_week, pre_len, \
         seq_len, training_epoch, batch_size, learning_rate, num_of_transformer_layers, transformer_hidden_size, \
-        gcn_num_filter, remote_sensing_feature_filename, remote_sensing_image_path, \
+        gcn_num_filter, remote_sensing_image_path, \
         all_data_filename, mask_filename, road_adj_filename, risk_adj_filename, poi_adj_filename, grid_node_filename, \
         north_south_map, west_east_map, trans_filename, bfc_filename, num_of_heads, augment_channel = loadConfig(config)
 
@@ -260,9 +259,9 @@ def main(config):
     else:
         remote_sensing_data = None
 
-    model = MGHN(train_data_shape[0][2], num_of_transformer_layers, seq_len, pre_len, transformer_hidden_size,
-                       time_shape[0][1], graph_feature_shape[0][2], nums_of_filter, north_south_map, west_east_map,
-                       args.nors, remote_sensing_data, num_of_heads, augment_channel)
+    model = MGHSTN(train_data_shape[0][2], num_of_transformer_layers, seq_len, pre_len, transformer_hidden_size,
+                   time_shape[0][1], graph_feature_shape[0][2], nums_of_filter, north_south_map, west_east_map,
+                   args.nors, remote_sensing_data, num_of_heads, augment_channel)
 
     model.to(device)
     print(model)

@@ -1,7 +1,7 @@
 {
     "patience": 10,
     "delta": 1e-6,
-    "seed": 12418,
+    "seed": 124,
     "data_type": "chicago",
 
     "bfc_20_10_filename": "data/chicago/bfc_20_10.pkl",
@@ -48,7 +48,6 @@
     "west_east_map_4": 2,
     "north_south_map_4": 2,
 
-    "remote_sensing_feature_filename": "data/chicago/remote_256_16_16_chicago.pt",
     "remote_sensing_image_path": "data/chicago_remote_sensing_256",
 
     "recent_prior": 3,
