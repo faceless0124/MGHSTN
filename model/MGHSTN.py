@@ -43,7 +43,7 @@ class PositionalEncoding(nn.Module):
 class GCN_Layer(nn.Module):
     def __init__(self, num_of_features, num_of_filter):
         """One layer of GCN
-        
+
         Arguments:
             num_of_features {int} -- the dimension of node feature
             num_of_filter {int} -- the number of graph filters
@@ -71,11 +71,71 @@ class GCN_Layer(nn.Module):
         return output
 
 
+class AdaptiveTemporalAttention(nn.Module):
+    def __init__(self, d_model, num_layers, transformer_hidden_size, num_of_heads, num_of_target_time_feature, seq_len,
+                 dropout=0.1):
+        """
+        Shared transformer encoder module for both grid and graph feature encoders.
+
+        Arguments:
+            d_model {int} -- The input dimension size for transformer.
+            num_layers {int} -- The number of transformer encoder layers.
+            transformer_hidden_size {int} -- The hidden size for transformer feedforward layers.
+            num_of_heads {int} -- Number of heads in multi-head attention.
+            num_of_target_time_feature {int} -- The number of target time feature (24 hour + 7 week + 1 holiday = 32).
+            seq_len {int} -- The time length of the input sequence.
+            dropout {float} -- Dropout rate. Default is 0.1.
+        """
+        super(AdaptiveTemporalAttention, self).__init__()
+        self.positional_encoding = PositionalEncoding(d_model=d_model, dropout=dropout)
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=d_model, nhead=num_of_heads,
+                                       dim_feedforward=transformer_hidden_size * 4),
+            num_layers=num_layers
+        )
+        self.fc0 = nn.Linear(in_features=d_model, out_features=transformer_hidden_size)
+
+        # Attention layers for integrating target time features
+        self.att_fc1 = nn.Linear(in_features=transformer_hidden_size, out_features=1)
+        self.att_fc2 = nn.Linear(in_features=num_of_target_time_feature, out_features=seq_len)
+        self.att_bias = nn.Parameter(torch.zeros(1))
+        self.att_softmax = nn.Softmax(dim=-1)
+
+    def forward(self, input_features, target_time_feature, N):
+        """
+        Forward method for processing the input features with transformer encoder and attention mechanism.
+
+        Arguments:
+            input_features {Tensor} -- The input features to be encoded.
+            target_time_feature {Tensor} -- The feature of target time, shape: (batch_size, num_target_time_feature).
+
+        Returns:
+            {Tensor} -- Encoded output, shape: (batch_size, hidden_size, W, H).
+        """
+        # Positional Encoding and Transformer Encoder
+        x = input_features.permute(1, 0, 2)  # (seq_len, batch_size, d_model)
+        x = self.positional_encoding(x)
+        transformer_output = self.transformer_encoder(x)
+        transformer_output = transformer_output.permute(1, 0, 2)  # (batch_size, seq_len, hidden_size)
+        transformer_output = self.fc0(transformer_output)
+
+        # Attention Mechanism
+        batch_size = target_time_feature.size(0)
+        grid_target_time = torch.unsqueeze(target_time_feature, 1).repeat(1, N, 1).view(batch_size * N, -1)
+        att_fc1_output = torch.squeeze(self.att_fc1(transformer_output))
+        att_fc2_output = self.att_fc2(grid_target_time)
+        att_score = self.att_softmax(F.relu(att_fc1_output + att_fc2_output + self.att_bias))
+        att_score = att_score.view(batch_size * N, -1, 1)
+        output = torch.sum(transformer_output * att_score, dim=1)
+
+        return output
+
+
 class RegionFeatureEncoder(nn.Module):
     def __init__(self, grid_in_channel, num_of_transformer_layers, seq_len,
                  transformer_hidden_size, num_of_target_time_feature, num_of_heads):
         """[summary]
-        
+
         Arguments:
             grid_in_channel {int} -- the number of grid data feature (batch_size,T,D,W,H),grid_in_channel=D
             num_of_transformer_layers {int} -- the number of GRU layers
@@ -92,18 +152,11 @@ class RegionFeatureEncoder(nn.Module):
             nn.ReLU(),
         )
 
-        # TransformerEncoder layer
-        self.positional_encoding = PositionalEncoding(d_model=grid_in_channel, dropout=0.1)  # positional encoding
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=grid_in_channel, nhead=num_of_heads,
-                                       dim_feedforward=transformer_hidden_size * 4),
-            num_layers=num_of_transformer_layers)  # Transformer encoder
-        self.fc0 = nn.Linear(in_features=grid_in_channel, out_features=transformer_hidden_size)
-
-        self.grid_att_fc1 = nn.Linear(in_features=transformer_hidden_size, out_features=1)
-        self.grid_att_fc2 = nn.Linear(in_features=num_of_target_time_feature, out_features=seq_len)
-        self.grid_att_bias = nn.Parameter(torch.zeros(1))
-        self.grid_att_softmax = nn.Softmax(dim=-1)
+        self.ata = AdaptiveTemporalAttention(d_model=grid_in_channel, num_layers=num_of_transformer_layers,
+                                             transformer_hidden_size=transformer_hidden_size,
+                                             num_of_heads=num_of_heads,
+                                             num_of_target_time_feature=num_of_target_time_feature,
+                                             seq_len=seq_len)
 
     def forward(self, grid_input, target_time_feature):
         """
@@ -123,19 +176,7 @@ class RegionFeatureEncoder(nn.Module):
             .contiguous() \
             .view(-1, T, D)
 
-        x = conv_output.permute(1, 0, 2)
-        x = self.positional_encoding(x)
-        tr_output = self.transformer_encoder(x)
-        tr_output = tr_output.permute(1, 0, 2)
-        tr_output = self.fc0(tr_output)
-
-        grid_target_time = torch.unsqueeze(target_time_feature, 1).repeat(1, W * H, 1).view(batch_size * W * H, -1)
-        grid_att_fc1_output = torch.squeeze(self.grid_att_fc1(tr_output))
-        grid_att_fc2_output = self.grid_att_fc2(grid_target_time)
-        grid_att_score = self.grid_att_softmax(F.relu(grid_att_fc1_output + grid_att_fc2_output + self.grid_att_bias))
-        grid_att_score = grid_att_score.view(batch_size * W * H, -1, 1)
-        grid_output = torch.sum(tr_output * grid_att_score, dim=1)
-
+        grid_output = self.ata(conv_output, target_time_feature, W * H)
         grid_output = grid_output.view(batch_size, W, H, -1).permute(0, 3, 1, 2).contiguous()
 
         return grid_output
@@ -220,18 +261,15 @@ class GraphTsEncoder(nn.Module):
             num_of_target_time_feature {int} -- the number of target time feature，为24(hour)+7(week)+1(holiday)=32
         """
         super(GraphTsEncoder, self).__init__()
+
+        self.ata = AdaptiveTemporalAttention(d_model=64, num_layers=num_of_transformer_layers + 1,
+                                             transformer_hidden_size=transformer_hidden_size,
+                                             num_of_heads=num_of_heads,
+                                             num_of_target_time_feature=num_of_target_time_feature,
+                                             seq_len=seq_len)
+
         self.north_south_map = north_south_map
         self.west_east_map = west_east_map
-        self.positional_encoding = PositionalEncoding(d_model=64, dropout=0.1)  # 位置编码
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=64, nhead=num_of_heads, dim_feedforward=transformer_hidden_size * 4),
-            num_layers=num_of_transformer_layers + 1)  # Transformer编码器
-        self.fc0 = nn.Linear(in_features=64, out_features=transformer_hidden_size)
-
-        self.graph_att_fc1 = nn.Linear(in_features=transformer_hidden_size, out_features=1)
-        self.graph_att_fc2 = nn.Linear(in_features=num_of_target_time_feature, out_features=seq_len)
-        self.graph_att_bias = nn.Parameter(torch.zeros(1))
-        self.graph_att_softmax = nn.Softmax(dim=-1)
 
     def forward(self, graph_output, target_time_feature, grid_node_map):
         """
@@ -246,19 +284,9 @@ class GraphTsEncoder(nn.Module):
             .view(batch_size * N, T, -1)
 
         graph_output = graph_output.view(batch_size * N, T, -1)  # （32*197, 7, 64）
-        x = graph_output.permute(1, 0, 2)  # 把批次大小放在第二个维度上
-        x = self.positional_encoding(x)  # 加上位置编码
-        graph_output = self.transformer_encoder(x)  # 通过Transformer编码器
-        graph_output = graph_output.permute(1, 0, 2)  # 把批次大小放在第一个维度上
-        graph_output = self.fc0(graph_output)  # 把维度转换为hidden_size
 
-        graph_target_time = torch.unsqueeze(target_time_feature, 1).repeat(1, N, 1).view(batch_size * N, -1)
-        graph_att_fc1_output = torch.squeeze(self.graph_att_fc1(graph_output))
-        graph_att_fc2_output = self.graph_att_fc2(graph_target_time)
-        graph_att_score = self.graph_att_softmax(
-            F.relu(graph_att_fc1_output + graph_att_fc2_output + self.graph_att_bias))
-        graph_att_score = graph_att_score.view(batch_size * N, -1, 1)  # (6304,7,1)
-        graph_output = torch.sum(graph_output * graph_att_score, dim=1)
+        graph_output = self.ata(graph_output, target_time_feature, N)
+
         graph_output = graph_output.view(batch_size, N, -1).contiguous()  # (32,197,64)
 
         grid_node_map_tmp = torch.from_numpy(grid_node_map) \
@@ -275,7 +303,7 @@ class MGHSTN(nn.Module):
                  num_of_target_time_feature, num_of_graph_feature, nums_of_graph_filters, north_south_map,
                  west_east_map, is_nors, remote_sensing_data, num_of_heads, augment_channel):
         """[summary]
-        
+
         Arguments:
             grid_in_channel {int} -- the number of grid data feature (batch_size,T,D,W,H),grid_in_channel=D
             num_of_transformer_layers {int} -- the number of GRU layers
