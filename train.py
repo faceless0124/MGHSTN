@@ -9,11 +9,12 @@ import random
 
 import sys
 import os
+from tqdm import tqdm
 
 from lib.dataloader import get_mask, get_adjacent, get_grid_node_map_maxtrix, \
     get_trans, get_remote_sensing_dataloader, generate_dataloader
 from lib.early_stop import EarlyStopping
-from model.MGHSTN import MGHSTN
+from model.MGHSTN_r import MGHSTN
 from lib.utils import mask_loss, compute_loss, predict_and_evaluate
 
 curPath = os.path.abspath(os.path.dirname(__file__))
@@ -74,6 +75,7 @@ def loadConfig(config):
     road_adj_filename = []
     risk_adj_filename = []
     poi_adj_filename = []
+    sum_adj_filename = []
     grid_node_filename = []
     north_south_map = []
     west_east_map = []
@@ -90,6 +92,7 @@ def loadConfig(config):
         road_adj_filename.append(config['road_adj_filename_{}'.format(i + 1)])
         risk_adj_filename.append(config['risk_adj_filename_{}'.format(i + 1)])
         poi_adj_filename.append(config['poi_adj_filename_{}'.format(i + 1)])
+        sum_adj_filename.append(config['sum_adj_filename_{}'.format(i + 1)])
         grid_node_filename.append(config['grid_node_filename_{}'.format(i + 1)])
         north_south_map.append(config['north_south_map_{}'.format(i + 1)])
         west_east_map.append(config['west_east_map_{}'.format(i + 1)])
@@ -100,8 +103,8 @@ def loadConfig(config):
     return (patience, delta, train_rate, valid_rate, recent_prior, week_prior, one_day_period, days_of_week, pre_len,
             seq_len, training_epoch, batch_size, learning_rate, num_of_transformer_layers, transformer_hidden_size,
             gcn_num_filter, remote_sensing_image_path,
-            all_data_filename, mask_filename, road_adj_filename, risk_adj_filename, poi_adj_filename, grid_node_filename
-            , north_south_map, west_east_map, trans, bfc_20_10_filename, num_of_heads, augment_channel)
+            all_data_filename, mask_filename, road_adj_filename, risk_adj_filename, poi_adj_filename, sum_adj_filename,
+            grid_node_filename, north_south_map, west_east_map, trans, bfc_20_10_filename, num_of_heads, augment_channel)
 
 
 def training(net,
@@ -113,6 +116,7 @@ def training(net,
              road_adj,
              risk_adj,
              poi_adj,
+             sum_adj,
              risk_mask,
              grid_node_map,
              trainer,
@@ -125,10 +129,16 @@ def training(net,
              ):
 
     global_step = 1
-    for epoch in range(1, training_epoch + 1):
+    for epoch in tqdm(range(1, training_epoch + 1)):
         net.train()
+        epoch_iterator = tqdm(zip(train_loader[0],
+                                  train_loader[1],
+                                  train_loader[2],
+                                  train_loader[3]),
+                              desc=f"Epoch {epoch}/{training_epoch}",
+                              unit="batch", leave=False)
         batch_num = 1
-        for batch_1, batch_2, batch_3, batch_4 in zip(train_loader[0], train_loader[1], train_loader[2], train_loader[3]):
+        for batch_1, batch_2, batch_3, batch_4 in epoch_iterator:
             batch = [batch_1, batch_2, batch_3, batch_4]
             train_feature = []
             target_time = []
@@ -145,32 +155,34 @@ def training(net,
 
 
             start_time = time()
-            final_output, classification_output = net(train_feature, target_time, graph_feature, road_adj, risk_adj,
-                                                      poi_adj, grid_node_map, trans)
-            l = mask_loss(final_output, classification_output, train_label, risk_mask, bfc, data_type)
+            final_output, classification_output, consistency_loss = net(train_feature, target_time, graph_feature, road_adj, risk_adj,
+                                                      poi_adj, sum_adj, grid_node_map, trans)
+            l = mask_loss(final_output, classification_output, train_label, risk_mask, bfc, data_type) + consistency_loss
             trainer.zero_grad()
             l.backward()
             trainer.step()
             training_loss = l.cpu().item()
 
-            print('global step: %s, epoch: %s, batch: %s, training loss: %.6f, time: %.2fs'
-                  % (global_step, epoch, batch_num, training_loss, time() - start_time), flush=True)
+            # print('global step: %s, epoch: %s, batch: %s, training loss: %.6f, consistency loss: %.6f time: %.2fs'
+            #       % (global_step, epoch, batch_num, training_loss, 0.01 * consistency_loss.cpu().item(), time() - start_time), flush=True)
 
             batch_num += 1
             global_step += 1
 
+            epoch_iterator.set_postfix({"Training Loss": f"{training_loss:.6f}"})
+
         # compute va/test loss
-        val_loss = compute_loss(net, val_loader, risk_mask, road_adj, risk_adj, poi_adj,
+        val_loss = compute_loss(net, val_loader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
                                 grid_node_map, trans, device, bfc, data_type)
         print('global step: %s, epoch: %s,val loss：%.6f' % (global_step - 1, epoch, val_loss), flush=True)
 
         if epoch == 1 or val_loss < early_stop.best_score:
             test_rmse, test_recall, test_map, test_inverse_trans_pre, test_inverse_trans_label = \
-                predict_and_evaluate(net, test_loader, risk_mask, road_adj, risk_adj, poi_adj,
+                predict_and_evaluate(net, test_loader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
                                      grid_node_map, trans, scaler, device)
 
             high_test_rmse, high_test_recall, high_test_map, _, _ = \
-                predict_and_evaluate(net, high_test_loader, risk_mask, road_adj, risk_adj, poi_adj,
+                predict_and_evaluate(net, high_test_loader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
                                      grid_node_map, trans, scaler, device)
 
 
@@ -201,7 +213,7 @@ def main(config):
     patience, delta, train_rate, valid_rate, recent_prior, week_prior, one_day_period, days_of_week, pre_len, \
         seq_len, training_epoch, batch_size, learning_rate, num_of_transformer_layers, transformer_hidden_size, \
         gcn_num_filter, remote_sensing_image_path, \
-        all_data_filename, mask_filename, road_adj_filename, risk_adj_filename, poi_adj_filename, grid_node_filename, \
+        all_data_filename, mask_filename, road_adj_filename, risk_adj_filename, poi_adj_filename, sum_adj_filename, grid_node_filename, \
         north_south_map, west_east_map, trans_filename, bfc_filename, num_of_heads, augment_channel = loadConfig(config)
 
     bfc = get_trans(bfc_filename)
@@ -277,6 +289,7 @@ def main(config):
     road_adj = []
     risk_adj = []
     poi_adj = []
+    sum_adj = []
     for i in range(4):
         risk_mask.append(get_mask(mask_filename[i]))
         road_adj.append(get_adjacent(road_adj_filename[i]))
@@ -285,6 +298,7 @@ def main(config):
             poi_adj.append(None)
         else:
             poi_adj.append(get_adjacent(poi_adj_filename[i]))
+        sum_adj.append(get_adjacent(sum_adj_filename[i]))
 
     for i in range(len(trans)):
         trans[i] = torch.from_numpy(trans[i]).unsqueeze(0).to(device)
@@ -315,6 +329,7 @@ def main(config):
             road_adj,
             risk_adj,
             poi_adj,
+            sum_adj,
             risk_mask,
             grid_node_map,
             trainer,

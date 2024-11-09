@@ -164,11 +164,13 @@ def mask_loss(predicts, classify_predicts, labels, region_mask, bfc, data_type="
     if data_type == 'nyc':
         return torch.mean(mse_list[0]) + torch.mean(mse_list[1]) + torch.mean(mse_list[2]) + torch.mean(mse_list[3]) + \
             3e-4 * bce_list[0] + 3e-4 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + mse_fc  # best
+        # return torch.mean(mse_list[0])
 
     if data_type == 'chicago':
         return torch.mean(mse_list[0]) + 3e-4 * torch.mean(mse_list[1]) + 1e-4 * torch.mean(
             mse_list[2]) + 3e-5 * torch.mean(mse_list[3]) + \
             1e-3 * bce_list[0] + 1e-3 * bce_list[1] + 1e-5 * bce_list[2] + 1e-5 * bce_list[3] + 3e-4 * mse_fc  # best
+        # return torch.mean(mse_list[0])
 
 
 def bce(y_pred, y_true, padded_value_indicator=0):
@@ -204,7 +206,7 @@ def bce(y_pred, y_true, padded_value_indicator=0):
 
 
 @torch.no_grad()
-def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj,
+def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
                  grid_node_map, trans, device, bfc, data_type='nyc'):
     """compute val/test loss
     
@@ -241,16 +243,16 @@ def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj,
             graph_feature.append(t_graph_feature)
             label.append(t_label)
 
-        final_output, classification_output = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj,
+        final_output, classification_output, consistency_loss = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj, sum_adj,
                                                   grid_node_map, trans)
-        l = mask_loss(final_output, classification_output, label, risk_mask, bfc, data_type)
+        l = mask_loss(final_output, classification_output, label, risk_mask, bfc, data_type) + consistency_loss
         temp.append(l.cpu().item())
     loss_mean = sum(temp) / len(temp)
     return loss_mean
 
 
 @torch.no_grad()
-def predict_and_evaluate(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj,
+def predict_and_evaluate(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
                          grid_node_map, trans, scaler, device):
     """predict val/test, return metrics
     
@@ -289,7 +291,7 @@ def predict_and_evaluate(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj
             graph_feature.append(t_graph_feature)
             label.append(t_label)
 
-        final_output, classification_output = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj,
+        final_output, classification_output, _ = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj, sum_adj,
                                                   grid_node_map, trans)
         prediction_list.append(final_output[0].cpu().numpy())
         label_list.append(label[0].cpu().numpy())

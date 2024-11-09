@@ -56,7 +56,7 @@ class EarlyStopping:
             print(f'EarlyStopping update val_loss: {self.best_score} --> {current_score}')
             self.best_score = current_score
             self.counter = 0
-            if -self.best_rmse + self.best_recall + 100 * self.best_map < -test_rmse + test_recall + 100 * test_map:
+            if -2 * self.best_rmse + self.best_recall + 10 * self.best_map < -2 * test_rmse + test_recall + 10 * test_map:
                 self.update_test_metrics(test_rmse, test_recall, test_map,
                                      high_test_rmse, high_test_recall, high_test_map,
                                      test_inverse_trans_pre, test_inverse_trans_label)
@@ -77,3 +77,17 @@ class EarlyStopping:
 
         self.best_pre = test_inverse_trans_pre
         self.best_label = test_inverse_trans_label
+
+    def reset(self):
+        self.counter = 0
+        self.best_score = None
+        self.best_rmse = None
+        self.best_recall = None
+        self.best_map = None
+        self.best_high_rmse = None
+        self.best_high_recall = None
+        self.best_high_map = None
+        self.best_label = None
+        self.best_pre = None
+        self.early_stop = False
+        self.val_loss_min = np.Inf

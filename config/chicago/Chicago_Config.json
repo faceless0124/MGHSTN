@@ -1,7 +1,7 @@
 {
-    "patience": 10,
+    "patience": 5,
     "delta": 1e-6,
-    "seed": 124,
+    "seed": 1241,
     "data_type": "chicago",
 
     "bfc_20_10_filename": "data/chicago/bfc_20_10.pkl",
@@ -11,6 +11,7 @@
     "road_adj_filename_1": "data/chicago/road_adj_20_20.pkl",
     "risk_adj_filename_1": "data/chicago/risk_adj_20_20.pkl",
     "poi_adj_filename_1": "",
+    "sum_adj_filename_1": "data/chicago/sum_adj_20_20.pkl",
     "grid_node_filename_1": "data/chicago/grid_node_map_20_20.pkl",
     "west_east_map_1": 20,
     "north_south_map_1": 20,
@@ -21,6 +22,7 @@
     "mask_filename_2": "data/chicago/risk_mask_10_10.pkl",
     "road_adj_filename_2": "data/chicago/road_adj_10_10.pkl",
     "risk_adj_filename_2": "data/chicago/risk_adj_10_10.pkl",
+    "sum_adj_filename_2": "data/chicago/sum_adj_10_10.pkl",
     "poi_adj_filename_2": "",
     "grid_node_filename_2": "data/chicago/grid_node_map_10_10.pkl",
     "west_east_map_2": 10,
@@ -32,6 +34,7 @@
     "mask_filename_3": "data/chicago/risk_mask_5_5.pkl",
     "road_adj_filename_3": "data/chicago/road_adj_5_5.pkl",
     "risk_adj_filename_3": "data/chicago/risk_adj_5_5.pkl",
+    "sum_adj_filename_3": "data/chicago/sum_adj_5_5.pkl",
     "poi_adj_filename_3": "",
     "grid_node_filename_3": "data/chicago/grid_node_map_5_5.pkl",
     "west_east_map_3": 5,
@@ -43,6 +46,7 @@
     "mask_filename_4": "data/chicago/risk_mask_2_2.pkl",
     "road_adj_filename_4": "data/chicago/road_adj_2_2.pkl",
     "risk_adj_filename_4": "data/chicago/risk_adj_2_2.pkl",
+    "sum_adj_filename_4": "data/chicago/sum_adj_2_2.pkl",
     "poi_adj_filename_4": "",
     "grid_node_filename_4": "data/chicago/grid_node_map_2_2.pkl",
     "west_east_map_4": 2,
@@ -58,7 +62,7 @@
 
     "train_rate": 0.6,
     "valid_rate": 0.2,
-    "training_epoch": 100,
+    "training_epoch": 1000,
     "optimizer": "adam",
 
     "batch_size": 32,
