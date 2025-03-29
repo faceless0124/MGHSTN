@@ -39,3 +39,23 @@ python train.py --config config/chicago/Chicago_Config.json --gpus 0
 python train_streaming.py --config config/chicago/Chicago_Config.json --gpus 0
 ```
 
+
+## Citation
+
+```
+@inproceedings{Chen2024mghstn,
+  author       = {Minxiao Chen and
+                  Haitao Yuan and
+                  Nan Jiang and
+                  Zhifeng Bao and
+                  Shangguang Wang},
+  editor       = {Edoardo Serra and
+                  Francesca Spezzano},
+  title        = {Urban Traffic Accident Risk Prediction Revisited: Regionality, Proximity,
+                  Similarity and Sparsity},
+  booktitle    = {CIKM},
+  pages        = {281--290},
+  publisher    = {{ACM}},
+  year         = {2024},
+}
+```

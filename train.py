@@ -153,8 +153,6 @@ def training(net,
                 graph_feature.append(t_graph_feature)
                 train_label.append(t_train_label)
 
-
-            start_time = time()
             final_output, classification_output, consistency_loss = net(train_feature, target_time, graph_feature, road_adj, risk_adj,
                                                       poi_adj, sum_adj, grid_node_map, trans)
             l = mask_loss(final_output, classification_output, train_label, risk_mask, bfc, data_type) + consistency_loss
@@ -162,9 +160,6 @@ def training(net,
             l.backward()
             trainer.step()
             training_loss = l.cpu().item()
-
-            # print('global step: %s, epoch: %s, batch: %s, training loss: %.6f, consistency loss: %.6f time: %.2fs'
-            #       % (global_step, epoch, batch_num, training_loss, 0.01 * consistency_loss.cpu().item(), time() - start_time), flush=True)
 
             batch_num += 1
             global_step += 1
@@ -343,5 +338,4 @@ def main(config):
 
 
 if __name__ == "__main__":
-    # python train.py --config config/nyc/NYC_Config.json --gpus 0
     main(config)
