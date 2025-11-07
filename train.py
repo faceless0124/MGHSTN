@@ -14,7 +14,7 @@ from tqdm import tqdm
 from lib.dataloader import get_mask, get_adjacent, get_grid_node_map_maxtrix, \
     get_trans, get_remote_sensing_dataloader, generate_dataloader
 from lib.early_stop import EarlyStopping
-from model.MGHSTN_r import MGHSTN
+from model.MGHSTN import MGHSTN
 from lib.utils import mask_loss, compute_loss, predict_and_evaluate
 
 curPath = os.path.abspath(os.path.dirname(__file__))
