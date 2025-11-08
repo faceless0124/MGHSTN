@@ -206,7 +206,7 @@ def bce(y_pred, y_true, padded_value_indicator=0):
 
 
 @torch.no_grad()
-def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
+def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj,
                  grid_node_map, trans, device, bfc, data_type='nyc'):
     """compute val/test loss
     
@@ -243,7 +243,7 @@ def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj, sum_ad
             graph_feature.append(t_graph_feature)
             label.append(t_label)
 
-        final_output, classification_output, consistency_loss = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj, sum_adj,
+        final_output, classification_output, consistency_loss = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj,
                                                   grid_node_map, trans)
         l = mask_loss(final_output, classification_output, label, risk_mask, bfc, data_type) + consistency_loss
         temp.append(l.cpu().item())
@@ -252,7 +252,7 @@ def compute_loss(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj, sum_ad
 
 
 @torch.no_grad()
-def predict_and_evaluate(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
+def predict_and_evaluate(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj,
                          grid_node_map, trans, scaler, device):
     """predict val/test, return metrics
     
@@ -291,7 +291,7 @@ def predict_and_evaluate(net, dataloader, risk_mask, road_adj, risk_adj, poi_adj
             graph_feature.append(t_graph_feature)
             label.append(t_label)
 
-        final_output, classification_output, _ = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj, sum_adj,
+        final_output, classification_output, _ = net(feature, target_time, graph_feature, road_adj, risk_adj, poi_adj,
                                                   grid_node_map, trans)
         prediction_list.append(final_output[0].cpu().numpy())
         label_list.append(label[0].cpu().numpy())

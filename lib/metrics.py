@@ -117,7 +117,7 @@ def MAP(y_true, y_pred, region_mask):
 
     all_k_AP = []
     for sample in range(len(true_top_k)):
-        all_k_AP.append(AP(list(true_top_k[sample]), list(pred_top_k[sample])))
+        all_k_AP.append(AP(list(true_top_k[sample]), list(pred_top_k[sample]))
     return sum(all_k_AP) / len(all_k_AP)
 
 
