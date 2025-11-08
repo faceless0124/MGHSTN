@@ -154,7 +154,7 @@ def training(net,
                 train_label.append(t_train_label)
 
             final_output, classification_output, consistency_loss = net(train_feature, target_time, graph_feature, road_adj, risk_adj,
-                                                      poi_adj, sum_adj, grid_node_map, trans)
+                                                      poi_adj, grid_node_map, trans)
             l = mask_loss(final_output, classification_output, train_label, risk_mask, bfc, data_type) + consistency_loss
             trainer.zero_grad()
             l.backward()
