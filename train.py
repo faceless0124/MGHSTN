@@ -14,7 +14,7 @@ from tqdm import tqdm
 from lib.dataloader import get_mask, get_adjacent, get_grid_node_map_maxtrix, \
     get_trans, get_remote_sensing_dataloader, generate_dataloader
 from lib.early_stop import EarlyStopping
-from model.MGHSTN_r import MGHSTN
+from model.MGHSTN import MGHSTN
 from lib.utils import mask_loss, compute_loss, predict_and_evaluate
 
 curPath = os.path.abspath(os.path.dirname(__file__))
@@ -116,7 +116,6 @@ def training(net,
              road_adj,
              risk_adj,
              poi_adj,
-             sum_adj,
              risk_mask,
              grid_node_map,
              trainer,
@@ -154,7 +153,7 @@ def training(net,
                 train_label.append(t_train_label)
 
             final_output, classification_output, consistency_loss = net(train_feature, target_time, graph_feature, road_adj, risk_adj,
-                                                      poi_adj, sum_adj, grid_node_map, trans)
+                                                      poi_adj, grid_node_map, trans)
             l = mask_loss(final_output, classification_output, train_label, risk_mask, bfc, data_type) + consistency_loss
             trainer.zero_grad()
             l.backward()
@@ -167,17 +166,17 @@ def training(net,
             epoch_iterator.set_postfix({"Training Loss": f"{training_loss:.6f}"})
 
         # compute va/test loss
-        val_loss = compute_loss(net, val_loader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
+        val_loss = compute_loss(net, val_loader, risk_mask, road_adj, risk_adj, poi_adj,
                                 grid_node_map, trans, device, bfc, data_type)
         print('global step: %s, epoch: %s,val loss：%.6f' % (global_step - 1, epoch, val_loss), flush=True)
 
         if epoch == 1 or val_loss < early_stop.best_score:
             test_rmse, test_recall, test_map, test_inverse_trans_pre, test_inverse_trans_label = \
-                predict_and_evaluate(net, test_loader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
+                predict_and_evaluate(net, test_loader, risk_mask, road_adj, risk_adj, poi_adj,
                                      grid_node_map, trans, scaler, device)
 
             high_test_rmse, high_test_recall, high_test_map, _, _ = \
-                predict_and_evaluate(net, high_test_loader, risk_mask, road_adj, risk_adj, poi_adj, sum_adj,
+                predict_and_evaluate(net, high_test_loader, risk_mask, road_adj, risk_adj, poi_adj,
                                      grid_node_map, trans, scaler, device)
 
 
@@ -324,7 +323,6 @@ def main(config):
             road_adj,
             risk_adj,
             poi_adj,
-            sum_adj,
             risk_mask,
             grid_node_map,
             trainer,

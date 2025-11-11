@@ -484,4 +484,21 @@ class MGHSTN(nn.Module):
 
             classification_output.append(torch.relu(final_output[i].view(final_output[i].shape[0], -1)))
 
-        return final_output, classification_output
+        # Calculate consistency loss
+        consistency_loss = 0
+        for i in range(1, 4):
+            # Calculate consistency between different scales
+            # Resize the larger tensor to match the smaller one
+            if final_output[0].shape[2] > final_output[i].shape[2]:
+                # Downsample final_output[0] to match final_output[i]
+                target_size = (final_output[i].shape[2], final_output[i].shape[3])
+                resized_output = F.interpolate(final_output[0], size=target_size, mode='bilinear', align_corners=False)
+                consistency_loss += torch.mean(torch.abs(resized_output - final_output[i]))
+            else:
+                # Upsample final_output[i] to match final_output[0]
+                target_size = (final_output[0].shape[2], final_output[0].shape[3])
+                resized_output = F.interpolate(final_output[i], size=target_size, mode='bilinear', align_corners=False)
+                consistency_loss += torch.mean(torch.abs(final_output[0] - resized_output))
+        consistency_loss = consistency_loss / 3
+
+        return final_output, classification_output, consistency_loss
